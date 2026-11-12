@@ -5,9 +5,11 @@ Verschluesselter Speicher fuer Zugangsdaten (Strava: Client Secret und Tokens, G
 Windows: DPAPI (CryptProtectData), dasselbe Verfahren, mit dem Edge und Chrome Passwoerter schuetzen. Die Dateien lassen sich
 nur unter diesem Windows-Konto auf diesem PC entschluesseln; ein Backup, ein kopierter Ordner oder ein anderes Konto
 koennen damit nichts anfangen. Gegen Programme, die unter demselben Konto laufen, schuetzt das (wie bei jedem Browser) nicht.
+macOS: Schluesselbund "Anmeldung" (lib/schluesselbund.py), je Name ein Eintrag "Trainingsblick". Er ist mit dem Anmeldepasswort
+des Mac-Benutzers verschluesselt; es gilt dasselbe wie oben. Eine Datei gibt es dort nicht.
 Andere Systeme: nichts wird gespeichert (schreiben wirft OSError), Zugangsdaten gibt es nie im Klartext auf der Platte.
 
-Ablage: <GEHEIM>\\<name>.bin (lib/orte.py, %LOCALAPPDATA%\\Trainingsblick\\geheim: wandert nicht mit dem Profil).
+Ablage unter Windows: <GEHEIM>\\<name>.bin (lib/orte.py, %LOCALAPPDATA%\\Trainingsblick\\geheim: wandert nicht mit dem Profil).
 Das Programm hiess frueher "Strava Dashboard"; _ENTROPIE behaelt den alten Namen, sonst liessen sich gespeicherte Zugaenge nicht mehr lesen.
 Alte Klartext-Dateien frueherer Versionen uebernimmt `uebernehmen` einmalig und loescht sie danach.
 """
@@ -15,8 +17,18 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 
 import orte
+
+MAC = sys.platform == "darwin"
+if MAC:
+    import schluesselbund
+# Name der Eintraege im macOS-Schluesselbund (Konto = Name des Zugangs, z. B. "strava"). Ein eigener Datenordner
+# (TRAININGSBLICK_DATEN) bekommt eigene Eintraege, so wie er unter Windows einen eigenen Ordner "geheim" hat.
+_EIGEN = (os.environ.get("TRAININGSBLICK_DATEN") or "").strip().strip('"')
+_DIENST = "Trainingsblick" + (" [%s]" % _EIGEN if _EIGEN else "")
+_da = {}                        # macOS: gemerkt, welche Eintraege es gibt (vorhanden() wird laufend gefragt)
 
 _ENTROPIE = b"StravaDashboard/Tresor/1"     # zusaetzlicher Schluesselanteil: andere Programme koennen die Daten nicht einfach entschluesseln
 
@@ -67,14 +79,19 @@ if os.name == "nt":
         return _aus(aus)
 else:
     def _verschluesseln(klar):
-        raise OSError("Zugangsdaten lassen sich nur unter Windows verschlüsselt speichern")
+        raise OSError("Zugangsdaten lassen sich nur unter Windows und macOS verschlüsselt speichern")
 
     def _entschluesseln(geheim):
-        raise OSError("Zugangsdaten lassen sich nur unter Windows entschlüsseln")
+        raise OSError("Zugangsdaten lassen sich nur unter Windows und macOS entschlüsseln")
 
 
 def lesen(name):
     """Gespeichertes Objekt oder None (fehlt oder laesst sich nicht entschluesseln)."""
+    if MAC:
+        try:
+            return json.loads(schluesselbund.lesen(_DIENST, name).decode("utf-8"))
+        except (OSError, ValueError):
+            return None
     try:
         return json.loads(_entschluesseln(_pfad(name).read_bytes()).decode("utf-8"))
     except (OSError, ValueError):
@@ -82,6 +99,11 @@ def lesen(name):
 
 
 def schreiben(name, obj):
+    if MAC:
+        schluesselbund.schreiben(_DIENST, name, json.dumps(obj, ensure_ascii=False).encode("utf-8"),
+                                 "Trainingsblick (%s)" % name)
+        _da[name] = True
+        return
     p = _pfad(name)
     p.parent.mkdir(parents=True, exist_ok=True)
     daten = _verschluesseln(json.dumps(obj, ensure_ascii=False).encode("utf-8"))
@@ -91,10 +113,21 @@ def schreiben(name, obj):
 
 
 def vorhanden(name):
+    if MAC:
+        if name not in _da:
+            _da[name] = schluesselbund.vorhanden(_DIENST, name)
+        return _da[name]
     return _pfad(name).is_file()
 
 
 def loeschen(name):
+    if MAC:
+        _da[name] = False
+        try:
+            schluesselbund.loeschen(_DIENST, name)
+        except OSError:
+            _da.pop(name, None)     # liess sich nicht loeschen: beim naechsten Mal neu nachsehen
+        return
     try:
         _pfad(name).unlink()
     except OSError:

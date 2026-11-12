@@ -1,6 +1,7 @@
 # Trainingsblick
 
 Ein Programm für Windows, das deine Strava-Aktivitäten übersichtlich auswertet und schöne Bilder und Videos zum Teilen macht.
+Es läuft auch auf dem Mac: siehe [Trainingsblick auf dem Mac](#trainingsblick-auf-dem-mac).
 
 ### [⬇ Trainingsblick für Windows herunterladen](https://github.com/tp-codings/trainingsblick/releases/latest)
 
@@ -92,6 +93,95 @@ Ohne Garmin fehlt nur der Bereich Körperdaten, alles andere funktioniert.
 
 Trainierst du auf einen Wettkampf hin? Trag ihn mit Datum ein, dann zeigt die Übersicht den Countdown.
 Ein Wochenziel in Stunden ist auch möglich. Beides lässt sich später unter **Einstellungen …** ändern.
+
+---
+
+## Trainingsblick auf dem Mac
+
+Trainingsblick läuft auch unter **macOS** (getestet mit macOS 27 auf einem Mac mit Apple-Chip), mit denselben Funktionen
+wie unter Windows. Es gibt zwei Wege: eine **fertige App** zum Weitergeben, die alles mitbringt (als `.dmg`, muss einmal
+selbst gebaut werden), oder der Start **aus dem Quellcode**, der sich beim ersten Mal selbst einrichtet. Alles Weitere in
+dieser Anleitung (Strava verbinden, Garmin, Bedienung) gilt genauso.
+
+### Als fertige App (.dmg)
+
+Auf dem Mac, der die App bekommt, muss nichts weiter installiert sein (kein Python, kein Terminal).
+
+**Bauen** (einmal, auf einem Mac mit eingerichtetem Programmordner und den Xcode-Werkzeugen, `xcode-select --install`):
+
+```
+.venv/bin/python installer/mac_bauen.py
+```
+
+Heraus kommt `installer/build/Trainingsblick-<Version>-mac-arm64.dmg` (rund 35 MB) für Macs mit Apple-Chip. Für einen
+Intel-Mac: `--arch x86_64` anhängen (ungetestet). Die App läuft ab macOS 11.
+
+**Installieren:** die `.dmg` öffnen und **Trainingsblick** auf **Programme** ziehen, dann aus dem Programme-Ordner oder dem
+Launchpad starten.
+
+- Die App ist nicht bei Apple beglaubigt (dafür bräuchte es ein kostenpflichtiges Entwicklerkonto). Kam die `.dmg` per
+  AirDrop, Mail oder Download, meldet macOS beim **ersten** Start deshalb, die App lasse sich nicht überprüfen: Meldung
+  mit **„Fertig“** schließen, dann **Systemeinstellungen → Datenschutz & Sicherheit**, ganz unten **„Dennoch öffnen“**.
+  Danach startet sie wie jede andere App. (Über einen USB-Stick kopiert kommt die Meldung in der Regel nicht.)
+- **Update:** neue `.dmg` bauen und die App in „Programme“ ersetzen. Einstellungen und Daten bleiben erhalten. Danach
+  fragt macOS einmal nach dem Schlüsselbund (Anmeldepasswort eingeben, **„Immer erlauben“**).
+- **Entfernen:** die App aus „Programme“ in den Papierkorb legen. Die Daten liegen in
+  `~/Library/Application Support/Trainingsblick`, die Zugänge als Einträge „Trainingsblick …“ in der Schlüsselbundverwaltung.
+
+### Aus dem Quellcode: installieren und starten
+
+1. Den Programmordner mit dem Quellcode (er muss die Mac-Dateien enthalten, z. B. „Trainingsblick starten.command“)
+   dorthin legen, wo er bleiben soll.
+2. Im Ordner **„Trainingsblick starten.command“** doppelklicken. Es öffnet sich ein Terminal-Fenster, das einmalig alles
+   einrichtet (1-2 Minuten): eine eigene Python-Umgebung im Programmordner, die Zusatzpakete und den Starter
+   **„Trainingsblick“** (Trainingsblick.app).
+   - Fehlt **Python 3.12 oder neuer**, bietet das Skript an, es mit [Homebrew](https://brew.sh) zu installieren. Ohne
+     Homebrew öffnet es die Download-Seite von python.org; danach die Datei noch einmal doppelklicken.
+   - Meldet macOS, die Datei stamme von einem „nicht verifizierten Entwickler“ (bei einem aus dem Internet geladenen Ordner):
+     **Systemeinstellungen → Datenschutz & Sicherheit**, dort unten auf **„Dennoch öffnen“** klicken.
+3. Trainingsblick öffnet sich in einem eigenen Fenster. Künftig genügt ein Doppelklick auf **„Trainingsblick“** im
+   Programmordner; die App lässt sich auch ins Dock ziehen. Zum Ausprobieren ohne Strava: **„Demo starten.command“**.
+
+**Nachfragen von macOS beim ersten Start** (jeweils einmal bestätigen):
+- *„Trainingsblick“ möchte auf Dateien in deinem Ordner „Schreibtisch“ (bzw. „Dokumente“, „Downloads“) zugreifen*:
+  kommt nur, wenn der Programmordner dort liegt. Mit **„Erlauben“** bestätigen, sonst kann das Programm sich selbst nicht lesen.
+- *… möchte auf den Schlüsselbund zugreifen*: kann nach einem Update von Python kommen. Anmeldepasswort des Mac eingeben
+  und **„Immer erlauben“** wählen.
+
+### Was auf dem Mac anders ist
+
+| Thema | Windows | Mac |
+|---|---|---|
+| Start | Startmenü / Desktop-Verknüpfung | „Trainingsblick“ (Trainingsblick.app) im Programmordner oder im Dock |
+| Fenster | Edge oder Chrome als App-Fenster | eigenes Fenster mit der Technik von Safari (WebKit); fehlt das Paket dafür: Edge/Chrome/Brave als App-Fenster, sonst ein Tab im Standardbrowser |
+| Einstellungen und Daten | `%APPDATA%\Trainingsblick` | `~/Library/Application Support/Trainingsblick` (im Finder: **Gehe zu → Gehe zum Ordner …**) |
+| Zugangsdaten | DPAPI, `%LOCALAPPDATA%\Trainingsblick\geheim` | Schlüsselbund „Anmeldung“, Einträge „Trainingsblick (strava)“ und „Trainingsblick (garmin)“ |
+| Eigene Sounds | `%APPDATA%\Trainingsblick\ton` | `~/Library/Application Support/Trainingsblick/ton` |
+| Vorschlag für Bilder und Videos | `Bilder\Trainingsblick` | `Bilder/Trainingsblick` in deinem Benutzerordner |
+| Tastatur | Strg+Z, Strg+C … | ⌘Z, ⌘C … |
+
+**Sicherheit:** Die Zugangsdaten (Strava: Client Secret und Tokens, Garmin: Zugangs-Schlüssel) liegen im
+macOS-Schlüsselbund, verschlüsselt mit deinem Anmeldepasswort, und nirgends als Datei. Wie unter Windows gilt: Ein anderes
+Benutzerkonto oder ein kopierter Ordner können damit nichts anfangen; vor Schadsoftware unter deinem eigenen Konto schützt
+das nicht. Ansehen oder löschen kannst du die Einträge im Programm **Schlüsselbundverwaltung** (nach „Trainingsblick“ suchen).
+
+**Update:** Der Hinweis „Neue Version … herunterladen“ öffnet die Release-Seite. Die Setup-Datei dort ist nur für
+Windows; für den Mac zählt der neue Quellcode. Enthält er die Mac-Dateien, den alten Programmordner einfach ersetzen
+(Trainingsblick vorher beenden) und wieder „Trainingsblick starten.command“ doppelklicken. Sind die Mac-Anpassungen nur
+in deinem eigenen Ordner vorhanden (mit `git` geholt und angepasst), die neue Version dazuholen, ohne sie zu verlieren:
+im Terminal im Programmordner `git stash`, dann `git pull`, dann `git stash pop`. Einstellungen, Zugänge und geladene
+Daten bleiben in jedem Fall erhalten, sie liegen nicht im Programmordner.
+
+**Deinstallieren:** den Programmordner löschen, dazu `~/Library/Application Support/Trainingsblick` und in der
+Schlüsselbundverwaltung die Einträge „Trainingsblick“.
+
+| Problem auf dem Mac | Lösung |
+|---|---|
+| „Trainingsblick“ öffnet sich nicht (Symbol hüpft kurz im Dock) | **Systemeinstellungen → Datenschutz & Sicherheit → Dateien & Ordner**: bei „Trainingsblick“ den Zugriff auf den Ordner erlauben, in dem das Programm liegt. Oder den Programmordner aus „Schreibtisch“/„Dokumente“ heraus verschieben und „Trainingsblick starten.command“ erneut doppelklicken. |
+| Nach dem Verschieben des Programmordners startet nichts mehr | „Trainingsblick starten.command“ im Ordner doppelklicken (bei Bedarf vorher den Ordner `.venv` und Trainingsblick.app löschen, dann wird neu eingerichtet). |
+| Nach einem großen Python-Update (z. B. 3.13 → 3.14) startet nichts mehr | Im Programmordner `.venv` und Trainingsblick.app löschen und „Trainingsblick starten.command“ doppelklicken. |
+| Strava-Zugang „ließ sich nicht verschlüsselt speichern“ | Die Nachfrage zum Schlüsselbund wurde abgelehnt. Noch einmal verbinden und „Immer erlauben“ wählen. |
+| Das Fenster ist weg, das Programm läuft aber noch | Im Dock per Rechtsklick auf „Trainingsblick“ **Beenden** (oder in der Aktivitätsanzeige). |
 
 ---
 
@@ -215,16 +305,22 @@ lib/trainingsblick_logik.py  Aktivitäten holen und zwischenspeichern, Bestzeite
 lib/garmin_logik.py            Garmin Connect; Abruf in lib/garmin_helfer.py (Paket garminconnect, Python ≥ 3.12),
                                der Zugang geht nur über stdin/stdout an den Helfer, nie als Datei
 lib/ablage.py                  Ordner öffnen; Speichern-Dialoge nur als Ersatzweg (normal speichert die Seite, ui/src/speichern.ts)
-lib/orte.py                    Datenordner (%APPDATA%\Trainingsblick, abweichend per TRAININGSBLICK_DATEN)
-lib/tresor.py                  Zugangsdaten verschlüsselt (DPAPI) in %LOCALAPPDATA%\Trainingsblick\geheim
+lib/orte.py                    Datenordner (%APPDATA%\Trainingsblick, macOS ~/Library/Application Support/Trainingsblick,
+                               abweichend per TRAININGSBLICK_DATEN)
+lib/tresor.py                  Zugangsdaten verschlüsselt (DPAPI) in %LOCALAPPDATA%\Trainingsblick\geheim,
+                               macOS: im Schlüsselbund (lib/schluesselbund.py, Security.framework über ctypes)
 lib/version.py, lib/update.py  Versionsnummer, Hinweis auf neue Releases
 ui/                            Oberfläche: React + TypeScript + Vite
 web/index.html                 fertiger Build der Oberfläche (eine Datei, mit eingecheckt)
-installer/                     Installer: bauen.ps1 (eingebettetes Python + Inno Setup), trainingsblick.iss, symbol.py
+installer/                     Installer: bauen.ps1 (eingebettetes Python + Inno Setup), trainingsblick.iss, symbol.py;
+                               mac_app.py baut den Starter Trainingsblick.app für macOS
+                               mac_bauen.py baut die eigenständige Mac-App samt .dmg (mac_starter.c: ihr Startprogramm)
 .github/workflows/release.yml  baut bei einem Tag v<Version> die Setup.exe und legt das Release an
 ```
 
 Aus dem Quellcode starten: `Trainingsblick starten.cmd` (legt `.venv` an), zum Ausprobieren `Demo starten.cmd`.
+Auf dem Mac: `Trainingsblick starten.command` bzw. `Demo starten.command` (zusätzlich `requirements-mac.txt`: pywebview für das
+eigene Fenster). Alles Mac-Spezifische hängt an `sys.platform == "darwin"`, der Windows-Weg ist unverändert.
 
 Neues Release: `VERSION` in `lib/version.py` erhöhen, committen, dann `git tag v1.2.0` und `git push origin v1.2.0`.
 Lokal bauen (braucht Python 3.12 und [Inno Setup 6](https://jrsoftware.org/isdl.php)):
@@ -238,7 +334,8 @@ npm ci
 npm run build
 ```
 
-Ohne Fenster starten (gibt nur die Adresse aus): `.venv\Scripts\python trainingsblick.py --kein-fenster --demo --port 8800 --token test`,
+Ohne Fenster starten (gibt nur die Adresse aus): `.venv\Scripts\python trainingsblick.py --kein-fenster --demo --port 8800 --token test`
+(Mac: `.venv/bin/python trainingsblick.py …`),
 dann im Browser `http://127.0.0.1:8800/?t=test` öffnen.
 
 Bilder und Videos zeichnet die Oberfläche selbst (Canvas). Videos entstehen Bild für Bild mit WebCodecs und

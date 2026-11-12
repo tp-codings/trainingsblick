@@ -2,6 +2,7 @@
 """
 Dateien, die die Seite erzeugt hat (Bilder, Videos), per Speichern- bzw. Ordner-Dialog ablegen und Ordner zeigen.
 Der Dialog (tkinter) laeuft in einem eigenen Prozess, damit das Dashboard-Fenster nicht haengt.
+macOS: der Dialog des Systems, am eigenen Fenster (pywebview) bzw. ueber osascript; tkinter fehlt dort oft.
 """
 from __future__ import annotations
 
@@ -35,8 +36,68 @@ def _python_konsole():
     return str(exe)
 
 
+_DIALOG_MAC = """on run argv
+    set {art, startordner, titel, vorgabe} to argv
+    tell current application to activate
+    try
+        if art is "ordner" then
+            if startordner is "" then
+                set ziel to choose folder with prompt titel
+            else
+                set ziel to choose folder with prompt titel default location (POSIX file startordner)
+            end if
+        else
+            if startordner is "" then
+                set ziel to choose file name with prompt titel default name vorgabe
+            else
+                set ziel to choose file name with prompt titel default name vorgabe default location (POSIX file startordner)
+            end if
+        end if
+        return POSIX path of ziel
+    on error number -128
+        return ""
+    end try
+end run"""
+
+
+def _dialog_mac(art, start, titel, name):
+    """Dialog von macOS: am eigenen Fenster, wenn es eines gibt (pywebview), sonst ueber osascript (Fenster im Browser)."""
+    pfad = None
+    try:
+        import webshell
+        fenster = webshell.FENSTER.get("webview")
+    except Exception:       # noqa: BLE001
+        fenster = None
+    if fenster is not None:
+        try:
+            import webview  # type: ignore
+            if art == "ordner":
+                pfad = fenster.create_file_dialog(webview.FileDialog.FOLDER, directory=start) or ""
+            else:
+                pfad = fenster.create_file_dialog(webview.FileDialog.SAVE, directory=start, save_filename=name) or ""
+            if isinstance(pfad, (list, tuple)):
+                pfad = pfad[0] if pfad else ""
+            pfad = str(pfad)
+        except Exception:       # noqa: BLE001
+            pfad = None
+    if pfad is None:
+        try:
+            p = subprocess.run(["/usr/bin/osascript", "-e", _DIALOG_MAC, art, start, titel, name],
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=900)
+        except (OSError, subprocess.SubprocessError) as ex:
+            raise ValueError("Auswahlfenster nicht möglich: %s" % ex)
+        pfad = p.stdout.decode("utf-8", "replace").strip()
+    endung = os.path.splitext(name)[1]
+    if pfad and art != "ordner" and endung and not os.path.splitext(pfad)[1]:
+        pfad += endung          # Endung im Dialog geloescht: wieder anhaengen, sonst erkennt kein Programm die Datei
+    return pfad
+
+
 def dialog(art, start, titel, name=""):
     """art: 'speichern' oder 'ordner'. -> gewaehlter Pfad oder '' (abgebrochen)"""
+    if sys.platform == "darwin":
+        pfad = _dialog_mac(art, start if os.path.isdir(start) else "", titel, name)
+        return os.path.normpath(pfad) if pfad else ""
     try:
         p = subprocess.run([_python_konsole(), "-c", _DIALOG, art, start if os.path.isdir(start) else "", titel, name],
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=900, creationflags=NO_WINDOW)
@@ -47,7 +108,7 @@ def dialog(art, start, titel, name=""):
 
 
 def zeigen(pfad):
-    """Ordner im Explorer oeffnen (Datei: Ordner mit markierter Datei)."""
+    """Ordner im Explorer (macOS: Finder) oeffnen (Datei: Ordner mit markierter Datei)."""
     p = Path(pfad)
     if not p.exists():
         p = p.parent if p.parent.exists() else STANDARD
@@ -59,7 +120,7 @@ def zeigen(pfad):
         else:
             os.startfile(str(p))        # noqa: S606
     elif sys.platform == "darwin":
-        subprocess.Popen(["open", str(p)])
+        subprocess.Popen(["open", "-R", str(p)] if p.is_file() else ["open", str(p)])      # -R: im Finder markieren
     else:
         subprocess.Popen(["xdg-open", str(p)])
 

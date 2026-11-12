@@ -10,6 +10,7 @@ import { Einrichtung } from "./einrichtung";
 import { Sym, SportSym } from "./symbole";
 import { TippHost } from "./tipp";
 import { StravaLogo } from "./stravaLogo";
+import { MAC } from "./plattform";
 import { Studio, StudioStart, TeilenSchnell } from "./studio/Studio";
 import { Uebersicht } from "./seiten/uebersicht";
 import { Aktivitaeten, Blick } from "./seiten/aktivitaeten";
@@ -205,7 +206,8 @@ export default function App() {
         ))}
         <div className="nav-fuss">
           {z?.update?.neu && (
-            <button className="nav-update" onClick={() => void aktion("oeffnen", { ziel: "release" })} data-tipp="Öffnet die Download-Seite. Die neue Setup-Datei einfach ausführen, deine Daten bleiben erhalten.">
+            <button className="nav-update" onClick={() => void aktion("oeffnen", { ziel: "release" })} data-tipp={MAC ? "Öffnet die Download-Seite. Die Setup-Datei dort ist für Windows; wie das Update auf dem Mac geht, steht im README. Deine Daten bleiben erhalten."
+              : "Öffnet die Download-Seite. Die neue Setup-Datei einfach ausführen, deine Daten bleiben erhalten."}>
               <Sym n="download" /><span>Neue Version {z.update.neu}<small>herunterladen …</small></span>
             </button>
           )}

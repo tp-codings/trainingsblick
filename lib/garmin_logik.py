@@ -103,6 +103,11 @@ def finde_python(vorgabe=""):
     else:
         for n in ("python3.14", "python3.13", "python3.12", "python3"):
             kandidaten.append(n)
+        if sys.platform == "darwin":
+            # aus dem Finder gestartet kennt der PATH weder Homebrew noch das Python von python.org
+            for v in ("3.14", "3.13", "3.12"):
+                kandidaten += ["/opt/homebrew/bin/python" + v, "/usr/local/bin/python" + v,
+                               "/Library/Frameworks/Python.framework/Versions/%s/bin/python3" % v]
     gesehen = set()
     beste = None
     for k in kandidaten:

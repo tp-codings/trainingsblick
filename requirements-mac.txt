@@ -1,0 +1,2 @@
+# Nur für macOS: eigenes Programmfenster (WebKit) statt eines Browser-Tabs. Installiert "Trainingsblick starten.command".
+pywebview==6.2.1

@@ -4,6 +4,7 @@ Programmsymbol (trainingsblick.ico) ohne Zusatzpakete zeichnen: tuerkis-blaues Q
 Streckenlinie. Jede Groesse wird einzeln gerechnet (Abstandsfelder, weiche Kanten) und als PNG in die ICO-Datei gelegt.
 
 Aufruf:  python installer/symbol.py <ziel.ico>     (macht installer/bauen.ps1)
+         python installer/symbol.py <ziel.icns>    (macOS, macht installer/mac_app.py)
 """
 from __future__ import annotations
 
@@ -33,9 +34,12 @@ def _deckung(d, pixel):
     return max(0.0, min(1.0, 0.5 - d / pixel))
 
 
-def bild(n):
+def bild(n, rand=None):
+    """PNG mit Kantenlaenge n. rand (Anteil der Kante) nur fuer macOS: dann rueckt auch die Linie mit nach innen."""
     pixel = 1.0 / n
-    rand = 0.04 if n >= 32 else 0.0
+    lx, ls = (rand, 1 - 2 * rand) if rand else (0.0, 1.0)       # Linie: Versatz und Massstab
+    if rand is None:
+        rand = 0.04 if n >= 32 else 0.0
     breite = 0.095 if n >= 32 else 0.12
     zeilen = []
     for y in range(n):
@@ -45,7 +49,8 @@ def bild(n):
             a = _deckung(_abstand_rundrechteck((px - rand) / (1 - 2 * rand), (py - rand) / (1 - 2 * rand), 0.22) * (1 - 2 * rand), pixel)
             f = py
             r, g, b = (round(OBEN[i] + (UNTEN[i] - OBEN[i]) * f) for i in range(3))
-            d = min(_abstand_strecke(px, py, *LINIE[i], *LINIE[i + 1]) for i in range(len(LINIE) - 1)) - breite / 2
+            qx, qy = (px - lx) / ls, (py - lx) / ls
+            d = (min(_abstand_strecke(qx, qy, *LINIE[i], *LINIE[i + 1]) for i in range(len(LINIE) - 1)) - breite / 2) * ls
             w = _deckung(d, pixel) * a
             r, g, b = (round(c + (255 - c) * w) for c in (r, g, b))
             z += bytes((r, g, b, round(255 * a)))
@@ -71,6 +76,21 @@ def ico(groessen=GROESSEN):
     return kopf + eintraege + daten
 
 
+# macOS: Kennung je Kantenlaenge in einer .icns-Datei (PNG-Eintraege); 32/64/256/512 doppelt, einmal als "@2x" der halben Groesse
+ICNS_ARTEN = {16: (b"icp4",), 32: (b"icp5", b"ic11"), 64: (b"icp6", b"ic12"), 128: (b"ic07",), 256: (b"ic08", b"ic13"),
+              512: (b"ic09", b"ic14")}
+ICNS_RAND = 0.09        # Symbole im Dock haben rundum Luft, sonst wirkt es groesser als die Nachbarn
+
+
+def icns(groessen=tuple(ICNS_ARTEN)):
+    daten = b""
+    for n in groessen:
+        b = bild(n, ICNS_RAND if n >= 32 else 0.0)
+        for art in ICNS_ARTEN[n]:
+            daten += art + struct.pack(">I", 8 + len(b)) + b
+    return b"icns" + struct.pack(">I", 8 + len(daten)) + daten
+
+
 if __name__ == "__main__":
     with open(sys.argv[1], "wb") as f:
-        f.write(ico())
+        f.write(icns() if sys.argv[1].lower().endswith(".icns") else ico())

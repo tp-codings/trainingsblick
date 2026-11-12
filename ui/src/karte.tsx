@@ -22,6 +22,22 @@ function einpassen(st: Strecke[], b: number, h: number, alle: boolean): Ansicht 
   return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, s: Math.min(TILE * 2 ** 19, Math.min(b / bw, h / bh)) };
 }
 
+const FILTER_DUNKEL = "invert(1) hue-rotate(180deg) brightness(0.75) contrast(0.85) saturate(0.6)";
+// WebKit (Safari, das Fenster der Mac-App) kennt filter auf dem Canvas nicht: dort bleibt die Zuweisung ohne Wirkung
+const KANN_FILTER = typeof CanvasRenderingContext2D !== "undefined" && "filter" in CanvasRenderingContext2D.prototype;
+
+/** Kartenkachel fuer das dunkle Design ohne Canvas-Filter: dasselbe Ergebnis wie FILTER_DUNKEL, aus Mischmodi gebaut. */
+function kachelDunkel(g: CanvasRenderingContext2D, im: HTMLImageElement, x: number, y: number, w: number, h: number) {
+  g.drawImage(im, x, y, w, h);
+  g.globalCompositeOperation = "difference"; g.fillStyle = "#fff"; g.fillRect(x, y, w, h);      // invert(1)
+  g.globalCompositeOperation = "color"; g.drawImage(im, x, y, w, h);                            // hue-rotate(180deg): Farbton wie vorher
+  g.globalCompositeOperation = "saturation"; g.globalAlpha = 0.4; g.fillStyle = "#808080"; g.fillRect(x, y, w, h);   // saturate(0.6)
+  g.globalCompositeOperation = "source-over";
+  g.globalAlpha = 0.25; g.fillStyle = "#000"; g.fillRect(x, y, w, h);                           // brightness(0.75)
+  g.globalAlpha = 0.15; g.fillStyle = "#808080"; g.fillRect(x, y, w, h);                        // contrast(0.85)
+  g.globalAlpha = 1;
+}
+
 export function RoutenKarte({ strecken, kacheln, dunkel, reset, auf, fokus }: { strecken: Strecke[]; kacheln: boolean; dunkel: boolean; reset: number; auf: (id: string) => void; fokus: Strecke | null }) {
   const wrap = useRef<HTMLDivElement>(null);
   const cv = useRef<HTMLCanvasElement>(null);
@@ -62,9 +78,16 @@ export function RoutenKarte({ strecken, kacheln, dunkel, reset, auf, fokus }: { 
             im = i;
           }
           if (im !== "fehler" && im.complete && im.naturalWidth > 0) {
-            g.filter = p.dunkel ? "invert(1) hue-rotate(180deg) brightness(0.75) contrast(0.85) saturate(0.6)" : "none";
-            g.drawImage(im, (tx / n - cx) * s + b / 2, (ty / n - cy) * s + h / 2, ts + 0.6, ts + 0.6);
-            g.filter = "none";
+            if (p.dunkel && !KANN_FILTER) {
+              // auf ganze Bildpunkte gelegt: die Kacheln duerfen sich hier nicht ueberlappen (doppelt umgekehrt = wieder hell)
+              const kante = (t: number, m: number) => Math.round(((t / n - m) * s) * dpr + (m === cx ? b : h) / 2 * dpr) / dpr;
+              const x = kante(tx, cx), y = kante(ty, cy);
+              kachelDunkel(g, im, x, y, kante(tx + 1, cx) - x, kante(ty + 1, cy) - y);
+            } else {
+              g.filter = p.dunkel ? FILTER_DUNKEL : "none";
+              g.drawImage(im, (tx / n - cx) * s + b / 2, (ty / n - cy) * s + h / 2, ts + 0.6, ts + 0.6);
+              g.filter = "none";
+            }
           }
         }
       }

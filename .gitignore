@@ -18,3 +18,7 @@ installer/cache/
 
 # Eigene Hilfsskripte (z. B. Reel-Aufnahme), nicht Teil des Programms
 tools/
+
+# macOS: Starter, den "Trainingsblick starten.command" beim ersten Start baut (installer/mac_app.py)
+Trainingsblick.app/
+.DS_Store

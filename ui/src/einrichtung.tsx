@@ -6,6 +6,7 @@ import { Sym, SymFeld } from "./symbole";
 import { nf, Ev } from "./util";
 import { dateiWaehlen } from "./speichern";
 import { StravaLogo } from "./stravaLogo";
+import { MAC } from "./plattform";
 import type { Aktion, Einst, Zustand } from "./seiten/ctx";
 
 const SCHRITTE: [string, string, string][] = [["kette", "Strava", "Aktivitäten"], ["uhrband", "Garmin", "optional"], ["flagge", "Ziel", "optional"], ["haken", "Fertig", "erster Abruf"]];
@@ -79,7 +80,7 @@ function StravaAnleitung({ cid, setCid, sec, setSec, aktion }: { cid: string; se
                 <td>{feld}</td>
                 <td>{wert ? <code>{inhalt}</code> : <span className="muted">{inhalt}</span>}{wichtig && <small>genau so, ohne http und ohne Schrägstrich</small>}</td>
                 <td>{wert && (kopiert === "!" + wert
-                  ? <small>bitte markieren und mit Strg+C kopieren</small>
+                  ? <small>bitte markieren und mit {MAC ? "⌘C" : "Strg+C"} kopieren</small>
                   : <button className="btn small" onClick={() => void kopieren(wert)}><Sym n={kopiert === wert ? "haken" : "kopieren"} />{kopiert === wert ? "Kopiert" : "Kopieren"}</button>)}</td>
               </tr>
             ))}
@@ -169,7 +170,7 @@ export function Einrichtung({ z, gz, einst, aktion, speichern, onClose }: {
               </>
             )}
             {z?.verb.text && <div className={z.verb.text.startsWith("Fehler") ? "fehlbox" : "muted"}>{z.verb.text}</div>}
-            <div className="ob-sicher"><Sym n="haken" />Client ID und Secret bleiben verschlüsselt auf deinem PC.</div>
+            <div className="ob-sicher"><Sym n="haken" />Client ID und Secret bleiben verschlüsselt auf deinem {MAC ? "Mac" : "PC"}.</div>
             <div className="ob-fuss">
               <StravaLogo className="ob-strava" />
               <span className="grow" />

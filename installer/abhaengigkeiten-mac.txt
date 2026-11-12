@@ -1,0 +1,23 @@
+# Feste Paketstaende fuer die eigenstaendige Mac-App (installer/mac_bauen.py): eigenes Fenster (pywebview) und Garmin.
+# Neu erzeugen nach einem Update von requirements.txt / requirements-mac.txt:
+#   .venv/bin/python -m pip freeze > installer/abhaengigkeiten-mac.txt   (diese Kopfzeilen wieder einsetzen)
+bottle==0.13.4
+certifi==2026.10.23
+cffi==2.1.1
+charset-normalizer==3.5.2
+curl_cffi==0.17.0
+garminconnect==0.3.19
+idna==3.20
+proxy_tools==0.1.0
+pycparser==3.12
+pyobjc-core==13.0
+pyobjc-framework-Cocoa==13.0
+pyobjc-framework-Quartz==13.0
+pyobjc-framework-Security==13.0
+pyobjc-framework-UniformTypeIdentifiers==13.0
+pyobjc-framework-WebKit==13.0
+pywebview==6.2.1
+requests==2.34.2
+typing_extensions==4.16.0
+ua-generator==2.1.8
+urllib3==2.8.0

@@ -3,15 +3,17 @@
 Trainingsblick: Auswertung der eigenen Strava-Aktivitaeten (und optional Garmin-Koerperdaten) in einem Fenster,
 dazu ein Share Studio fuer Bilder und Videos. Installation und Bedienung: README.md.
 
-Start:          Doppelklick auf "Trainingsblick starten.cmd" (richtet beim ersten Mal alles ein)
+Start:          Doppelklick auf "Trainingsblick starten.cmd" (richtet beim ersten Mal alles ein),
+                auf dem Mac "Trainingsblick starten.command" (README.md, "Trainingsblick auf dem Mac")
 Ohne Fenster:   python trainingsblick.py --kein-fenster [--demo] [--port N] [--token T]   (gibt nur die Adresse aus)
 --demo:         erfundene Trainingsdaten, kein Strava-Zugriff (zum Ausprobieren)
 
 Aufbau: Python startet einen lokalen Webserver (nur 127.0.0.1, mit Token) und oeffnet die Oberflaeche (web/index.html, gebaut
-aus ui/) als App-Fenster von Edge/Chrome. Einstellungen und Zwischenspeicher liegen in %APPDATA%\\Trainingsblick,
-die Zugangsdaten verschluesselt in %LOCALAPPDATA%\\Trainingsblick\\geheim (lib/orte.py), nie im Programmordner.
+aus ui/) als App-Fenster von Edge/Chrome (macOS: eigenes Fenster ueber pywebview). Einstellungen und Zwischenspeicher
+liegen in %APPDATA%\\Trainingsblick (macOS: ~/Library/Application Support/Trainingsblick), die Zugangsdaten verschluesselt
+in %LOCALAPPDATA%\\Trainingsblick\\geheim (macOS: im Schluesselbund), nie im Programmordner (lib/orte.py).
   lib/strava_api.py            Strava-Anmeldung und Abrufe
-  lib/tresor.py                 Zugangsdaten (Strava, Garmin) verschluesselt per Windows-DPAPI
+  lib/tresor.py                 Zugangsdaten (Strava, Garmin) verschluesselt per Windows-DPAPI bzw. im macOS-Schluesselbund
   lib/trainingsblick_logik.py Aktivitaeten holen und zwischenspeichern, Bestzeiten/Runden/Wetter im Hintergrund, Demo-Daten
   lib/garmin_logik.py           Garmin Connect (Abruf in lib/garmin_helfer.py mit dem Paket garminconnect)
   lib/ablage.py                 Speichern-Dialoge fuer Bilder und Videos (nur Ersatzweg; normal speichert die Seite selbst)

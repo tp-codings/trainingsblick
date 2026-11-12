@@ -5,6 +5,8 @@ webshell.py - gemeinsamer Unterbau fuer Scripts mit React-Oberflaeche (Design wi
 Ein Script liefert nur seine RPC-Tabelle {name: funktion(dict) -> dict} und den Pfad zur gebauten index.html.
 Hier steckt alles andere: lokaler HTTP-Server (127.0.0.1, Token), Fenster (pywebview -> Edge/Chrome --app ->
 Standardbrowser), Heartbeat (ping/beenden) und gemerkte Fenstergroesse.
+macOS: pywebview oeffnet ein eigenes Fenster (WebKit) mit eigenem Namen in der Menueleiste; ohne pywebview wird ein
+installierter Chromium-Browser (Edge, Chrome, Brave ...) im App-Modus genommen, sonst der Standardbrowser.
 
     import webshell
     sys.exit(webshell.starten(funktionen=..., ui_datei=Path(...), titel="...", profil="NucZugriff",
@@ -93,6 +95,8 @@ def _shelf_ordner() -> Path:
 
 
 _FENSTER_PID = {"pid": 0}      # vom Browser-Start gesetzt (Edge/Chrome laeuft mit eigenem Profil als eigener Prozess)
+MAC = sys.platform == "darwin"
+FENSTER = {"webview": None}    # das pywebview-Fenster, solange es offen ist (lib/ablage.py: Speichern-Dialoge am Fenster)
 
 
 def _fenster_von(pids, titel: str):
@@ -324,7 +328,15 @@ def _sicherer_dateiname(name: str) -> str:
 
 def _aktiver_monitor():
     """Arbeitsbereich (links, oben, rechts, unten) des Monitors, auf dem gerade das aktive Fenster (z. B. Directory Opus,
-    von dem aus das Script gestartet wurde) liegt; sonst der Monitor unter dem Mauszeiger, sonst None."""
+    von dem aus das Script gestartet wurde) liegt; sonst der Monitor unter dem Mauszeiger, sonst None.
+    macOS: Bildschirm unter dem Mauszeiger, ohne Menueleiste und Dock."""
+    if MAC:
+        s = _mac_schirm()
+        if not s:
+            return None
+        x, y, w, h = s["sichtbar"]
+        oben = s["h0"] - (y + h)             # Cocoa zaehlt von unten, hier wie unter Windows von oben
+        return (int(x), int(oben), int(x + w), int(oben + h)) if w > 300 and h > 300 else None
     if os.name != "nt":
         return None
     try:
@@ -356,6 +368,151 @@ def _aktiver_monitor():
     except Exception:    # noqa: BLE001
         pass
     return None
+
+
+# --------------------------------------------------------------------------- #
+#  macOS
+# --------------------------------------------------------------------------- #
+_JXA_SCHIRM = """ObjC.import('AppKit');
+var s = $.NSScreen.screens, m = $.NSEvent.mouseLocation, n = 0;
+for (var i = 0; i < s.count; i++) { var f = s.objectAtIndex(i).frame;
+  if (m.x >= f.origin.x && m.x < f.origin.x + f.size.width && m.y >= f.origin.y && m.y < f.origin.y + f.size.height) { n = i; break; } }
+var f = s.objectAtIndex(n).frame, v = s.objectAtIndex(n).visibleFrame;
+[n, s.objectAtIndex(0).frame.size.height, f.origin.x, f.origin.y, f.size.width, f.size.height,
+ v.origin.x, v.origin.y, v.size.width, v.size.height].join(' ');"""
+_SCHIRM = {"zeit": 0.0, "wert": None}
+_MAC_HALT = {}
+_MAC_TEXTE = {"global.ok": "OK", "global.cancel": "Abbrechen", "global.quit": "Beenden", "global.saveFile": "Speichern",
+              "global.quitConfirmation": "Wirklich beenden?", "cocoa.menu.about": "Über", "cocoa.menu.services": "Dienste",
+              "cocoa.menu.view": "Darstellung", "cocoa.menu.edit": "Bearbeiten", "cocoa.menu.hide": "Ausblenden",
+              "cocoa.menu.hideOthers": "Andere ausblenden", "cocoa.menu.showAll": "Alle einblenden",
+              "cocoa.menu.quit": "Beenden", "cocoa.menu.fullscreen": "Vollbild", "cocoa.menu.cut": "Ausschneiden",
+              "cocoa.menu.copy": "Kopieren", "cocoa.menu.paste": "Einsetzen", "cocoa.menu.selectAll": "Alles auswählen"}
+
+
+def _mac_schirm():
+    """Bildschirm unter dem Mauszeiger (sonst der Hauptbildschirm): {"nr", "h0", "rahmen", "sichtbar"}. Die Rechtecke
+    (x, y, breite, hoehe) stehen in Cocoa-Koordinaten (Ursprung links UNTEN auf dem Hauptbildschirm, h0 = dessen Hoehe);
+    "sichtbar" ist die Flaeche ohne Menueleiste und Dock. Mit pyobjc direkt, sonst ueber osascript (bringt macOS mit)."""
+    if time.time() - _SCHIRM["zeit"] < 5:
+        return _SCHIRM["wert"]
+    z = None
+    try:
+        from AppKit import NSEvent, NSScreen  # type: ignore
+        schirme = list(NSScreen.screens())
+        m, nr = NSEvent.mouseLocation(), 0
+        for i, s in enumerate(schirme):
+            f = s.frame()
+            if f.origin.x <= m.x < f.origin.x + f.size.width and f.origin.y <= m.y < f.origin.y + f.size.height:
+                nr = i
+                break
+        f, v = schirme[nr].frame(), schirme[nr].visibleFrame()
+        z = [nr, schirme[0].frame().size.height, f.origin.x, f.origin.y, f.size.width, f.size.height,
+             v.origin.x, v.origin.y, v.size.width, v.size.height]
+    except Exception:    # noqa: BLE001
+        try:
+            r = subprocess.run(["/usr/bin/osascript", "-l", "JavaScript", "-e", _JXA_SCHIRM], stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL, timeout=15)
+            z = [float(x) for x in r.stdout.decode("utf-8", "replace").split()]
+        except Exception:    # noqa: BLE001
+            z = None
+    wert = {"nr": int(z[0]), "h0": z[1], "rahmen": tuple(z[2:6]), "sichtbar": tuple(z[6:10])} if z and len(z) == 10 else None
+    _SCHIRM.update(zeit=time.time(), wert=wert)
+    return wert
+
+
+def _mac_fensterlage(webview, fx, fy):
+    """Lage fuer pywebview: es zaehlt x/y ab der linken oberen Ecke EINES Bildschirms (screen=...), die Geometrie hier
+    rechnet dagegen ueber alle Bildschirme hinweg ab der linken oberen Ecke des Hauptbildschirms."""
+    s = _mac_schirm()
+    if fx is None or not s:
+        return {}
+    x, y, _w, h = s["rahmen"]
+    kw = {"x": int(fx - x), "y": int(fy - (s["h0"] - (y + h)))}
+    try:
+        schirme = webview.screens() if callable(webview.screens) else webview.screens
+        kw["screen"] = schirme[s["nr"]]
+    except Exception:    # noqa: BLE001
+        pass
+    return kw
+
+
+def _mac_vorbereiten(titel: str, profil: str) -> None:
+    """Vor dem Oeffnen des eigenen Fensters: Programmname fuer die Menueleiste (sonst stuende dort "Python"), Symbol fuers
+    Dock (nur beim Start aus dem Terminal; ein Start ueber ein .app-Buendel bringt sein Symbol mit), kein App Nap
+    (sonst bremst macOS das Laden im Hintergrund, sobald das Fenster verdeckt ist)."""
+    try:
+        import AppKit  # type: ignore
+        import Foundation  # type: ignore
+    except Exception:    # noqa: BLE001
+        return
+    try:
+        b = Foundation.NSBundle.mainBundle()
+        for info in (b.localizedInfoDictionary(), b.infoDictionary()):
+            if info is not None:
+                info["CFBundleName"] = titel
+    except Exception:    # noqa: BLE001
+        pass
+    try:
+        url = AppKit.NSRunningApplication.currentApplication().bundleURL()
+        buendel = os.path.basename(str(url.path()).rstrip("/")) if url is not None else ""
+        if profil and not (buendel.endswith(".app") and buendel != "Python.app"):
+            daten = symbol_svg(profil).encode("utf-8")
+            bild = AppKit.NSImage.alloc().initWithData_(Foundation.NSData.dataWithBytes_length_(daten, len(daten)))
+            if bild is not None and bild.isValid():
+                AppKit.NSApplication.sharedApplication().setApplicationIconImage_(bild)
+    except Exception:    # noqa: BLE001
+        pass
+    try:
+        # NSActivityUserInitiatedAllowingIdleSystemSleep: der Mac darf weiter in den Ruhezustand gehen
+        _MAC_HALT["aktiv"] = Foundation.NSProcessInfo.processInfo().beginActivityWithOptions_reason_(0x00EFFFFF, titel)
+    except Exception:    # noqa: BLE001
+        pass
+
+
+def _mac_menue(titel: str) -> None:
+    """Programm-Menue auf Deutsch: pywebview haengt den Programmnamen immer hinten an ("Ausblenden Trainingsblick")."""
+    def arbeit():
+        try:
+            import AppKit  # type: ignore
+            menue = AppKit.NSApplication.sharedApplication().mainMenu().itemAtIndex_(0).submenu()
+            texte = {"hide:": "%s ausblenden" % titel, "terminate:": "%s beenden" % titel,
+                     "hideOtherApplications:": "Andere ausblenden", "unhideAllApplications:": "Alle einblenden"}
+            for i in range(menue.numberOfItems()):
+                eintrag = menue.itemAtIndex_(i)
+                aktion = eintrag.action()
+                aktion = aktion.decode() if isinstance(aktion, bytes) else str(aktion or "")
+                if aktion == "orderFrontStandardAboutPanel:":      # zeigte Namen und Version von Python
+                    eintrag.setHidden_(True)
+                    if i + 1 < menue.numberOfItems() and menue.itemAtIndex_(i + 1).isSeparatorItem():
+                        menue.itemAtIndex_(i + 1).setHidden_(True)
+                elif aktion in texte:
+                    eintrag.setTitle_(texte[aktion])
+        except Exception:    # noqa: BLE001
+            pass
+    try:
+        from PyObjCTools import AppHelper  # type: ignore
+        AppHelper.callAfter(arbeit)
+    except Exception:    # noqa: BLE001
+        pass
+
+
+def _profil_ordner(profil: str) -> str:
+    """Eigenes Browser-Profil des App-Fensters (Edge/Chrome): getrennt vom normalen Browser des Nutzers."""
+    if MAC:
+        return os.path.join(os.path.expanduser("~"), "Library", "Application Support", profil, "browser")
+    return os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), profil, "browser")
+
+
+def _browser_beenden() -> None:
+    """macOS: ein Programm laeuft weiter, wenn sein letztes Fenster zu ist. Den fuer das App-Fenster gestarteten Browser
+    deshalb am Ende selbst beenden (er laeuft mit eigenem Profil als eigener Prozess, der normale Browser bleibt offen)."""
+    p = _FENSTER_PID.get("prozess")
+    if MAC and p is not None and p.poll() is None:
+        try:
+            p.terminate()
+        except OSError:
+            pass
 
 
 def fenster_geometrie(gespeichert, min_w=600, min_h=400, anteil=(0.94, 0.92), standard=(1600, 960)):
@@ -455,11 +612,20 @@ def fenster_oeffnen(url: str, titel: str, geo, profil: str, min_groesse=(700, 45
     try:
         import webview  # type: ignore
         kw = {"x": fx, "y": fy} if fx is not None else {}
+        if MAC:
+            _mac_vorbereiten(titel, profil)
+            kw = dict(_mac_fensterlage(webview, fx, fy), localization=_MAC_TEXTE)
         fenster = webview.create_window(titel, url, width=breite, height=hoehe, min_size=min_groesse, **kw)
-        if maximiert:
-            webview.start(lambda: _maximieren(titel, fenster))
-        else:
-            webview.start()
+        FENSTER["webview"] = fenster
+        try:
+            if MAC:              # "maximiert" heisst hier: das Fenster fuellt schon die freie Flaeche des Bildschirms
+                webview.start(lambda: _mac_menue(titel))
+            elif maximiert:
+                webview.start(lambda: _maximieren(titel, fenster))
+            else:
+                webview.start()
+        finally:
+            FENSTER["webview"] = None
         return True
     except Exception:    # noqa: BLE001
         pass
@@ -470,21 +636,26 @@ def fenster_oeffnen(url: str, titel: str, geo, profil: str, min_groesse=(700, 45
             if b:
                 kandidaten += [os.path.join(b, r"Microsoft\Edge\Application\msedge.exe"),
                                os.path.join(b, r"Google\Chrome\Application\chrome.exe")]
+    elif MAC:
+        for ordner in ("/Applications", os.path.expanduser("~/Applications")):
+            for name in ("Microsoft Edge", "Google Chrome", "Brave Browser", "Chromium", "Vivaldi"):
+                kandidaten.append(os.path.join(ordner, name + ".app", "Contents", "MacOS", name))
     else:
         kandidaten += [shutil.which(x) or "" for x in ("microsoft-edge", "google-chrome", "chromium", "chromium-browser")]
     for k in kandidaten:
         if k and os.path.isfile(k):
             try:
-                pfad = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), profil, "browser")
+                pfad = _profil_ordner(profil)
                 args = [k, f"--app={url}", f"--user-data-dir={pfad}", "--no-first-run", "--no-default-browser-check"]
-                if not maximiert:
+                if not maximiert or MAC:        # macOS kennt --start-maximized nicht: Groesse = freie Flaeche des Bildschirms
                     args.append(f"--window-size={breite},{hoehe}")
                 if fx is not None:
                     args.append(f"--window-position={fx},{fy}")
-                if maximiert:
+                if maximiert and not MAC:
                     args.append("--start-maximized")
-                _FENSTER_PID["pid"] = subprocess.Popen(args).pid
-                if maximiert:
+                prozess = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) if MAC else subprocess.Popen(args)
+                _FENSTER_PID["pid"], _FENSTER_PID["prozess"] = prozess.pid, prozess
+                if maximiert and not MAC:
                     threading.Thread(target=_maximieren, args=(titel, None, False), daemon=True).start()
                 return False
             except OSError:
@@ -560,6 +731,7 @@ def starten(*, funktionen, ui_datei: Path, titel: str, profil: str, geo, argv=No
     finally:
         try:
             fenster_abmelden(profil)
+            _browser_beenden()
             beim_ende()
         finally:
             srv.shutdown()
